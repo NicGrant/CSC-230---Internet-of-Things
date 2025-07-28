@@ -1,0 +1,99 @@
+/*
+  Nickolaus Grant
+  CSC:230 - Internet of Things
+  Assignment 10.1 - Retreving Data from a google firebase
+*/
+#include <M5Core2.h>
+#include <WiFi.h>
+#include <Firebase_ESP_Client.h>
+#include "addons/TokenHelper.h"
+#include "secrets.h" // Contains WIFI_SSID, WIFI_PASSWORD, API_KEY, DATABASE_URL
+
+// Firebase and WiFi objects
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
+
+unsigned long sendDataPrevMillis = 0;
+bool signupOK = false;
+
+int intValue = 0;
+float floatValue = 0.0;
+
+void setup() {
+  M5.begin();
+  Serial.begin(115200);
+
+  // Connect to Wi-Fi
+  WiFi.begin(SECRET_SSID, SECRET_PASS);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(300);
+  }
+  Serial.println();
+  Serial.print("Connected with IP: ");
+  Serial.println(WiFi.localIP());
+
+  // Firebase API Key and DB URL
+  config.api_key = API_KEY;
+  config.database_url = DATABASE_URL;
+
+  // Anonymous sign-in
+  if (Firebase.signUp(&config, &auth, "", "")) {
+    Serial.println("Firebase sign-in OK");
+    signupOK = true;
+  } else {
+    Serial.printf("Firebase sign-up failed: %s\n", config.signer.signupError.message.c_str());
+  }
+
+  // Set up Firebase callbacks
+  config.token_status_callback = tokenStatusCallback;
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+
+  // Setup screen
+  M5.Lcd.setTextSize(4);
+  M5.Lcd.setTextColor(GREEN, BLACK); // Text with black background
+  M5.Lcd.fillScreen(BLACK);
+}
+
+void loop() {
+  if (Firebase.ready() && signupOK && (millis() - sendDataPrevMillis > 30000 || sendDataPrevMillis == 0)) {
+    sendDataPrevMillis = millis();
+
+    // Read Integer
+    if (Firebase.RTDB.getInt(&fbdo, "/test/int")) {
+      if (fbdo.dataType() == "int") {
+        intValue = fbdo.intData();
+        Serial.print("Int Value: ");
+        Serial.println(intValue);
+      }
+    } else {
+      Serial.print("Int Error: ");
+      Serial.println(fbdo.errorReason());
+    }
+
+    // Read Float
+    if (Firebase.RTDB.getFloat(&fbdo, "/test/float")) {
+      if (fbdo.dataType() == "float") {
+        floatValue = fbdo.floatData();
+        Serial.print("Float Value: ");
+        Serial.println(floatValue);
+      }
+    } else {
+      Serial.print("Float Error: ");
+      Serial.println(fbdo.errorReason());
+    }
+
+    // Display on screen
+    M5.Lcd.fillScreen(BLACK);
+    M5.Lcd.setCursor(10, 30);
+    M5.Lcd.print("Int: ");
+    M5.Lcd.println(intValue);
+
+    M5.Lcd.setCursor(10, 70);
+    M5.Lcd.print("Float: ");
+    M5.Lcd.println(floatValue);
+  }
+}
