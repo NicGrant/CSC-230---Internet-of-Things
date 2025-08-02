@@ -1,0 +1,86 @@
+/*
+  Nickolaus Grant
+  Assignment 12.1: ESP32 and a soft Access Point
+  Project 2 - This projects goal is to follow the first project in created a wifi web server but make a flag for a country.
+*/
+
+// Libaries needed
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiAP.h>
+#include <M5Core2.h>
+
+// SSID and password for access point
+const char* ssid = "M5FlagAP";
+const char* password = "";
+
+WiFiServer server(80);  // Set up a web server on port 80
+
+void setup() {
+  M5.begin(); // Initialize M5Core2 system
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(WHITE);
+  M5.Lcd.println("Starting Flag Server");
+
+  Serial.begin(115200); // Begin serial communication for debugging
+
+  // Start the Wi-Fi Access Point
+  if (!WiFi.softAP(ssid, password)) {
+    Serial.println("Failed to start AP");
+    while (true); // Halt if AP fails
+  }
+
+  IPAddress ip = WiFi.softAPIP(); // Display IP address of soft AP
+  Serial.print("SoftAP IP address: ");
+  Serial.println(ip);
+
+  server.begin(); // Begin web server
+  M5.Lcd.println("Connect to M5FlagAP");
+  M5.Lcd.println("Go to 192.168.4.1");
+}
+
+// Function to draw a Japanese flag on the M5Core2 screen
+void drawJapaneseFlag() {
+  M5.Lcd.fillScreen(WHITE);              // White background
+  M5.Lcd.fillCircle(160, 120, 40, RED);  // Red circle in center
+}
+
+void loop() {
+  WiFiClient client = server.available(); // Wait for a client to connect
+
+  if (client) {
+    String currentLine = "";
+
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read(); // Read each character from client
+        currentLine += c;
+
+        // When the request line is complete
+        if (c == '\n') {
+          // If user requested the Japanese flag
+          if (currentLine.indexOf("GET /japan") >= 0) {
+            drawJapaneseFlag(); // Display Japanese flag
+          }
+
+          // Send back an HTML page with a button
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:text/html");
+          client.println();
+          client.println("<!DOCTYPE html><html><body>");
+          client.println("<h2>Display Flag</h2>");
+          client.println("<form action=\"/japan\" method=\"GET\">");
+          client.println("<button type=\"submit\">Show Japanese Flag</button>");
+          client.println("</form>");
+          client.println("</body></html>");
+
+          break; // End request
+        }
+      }
+    }
+
+    delay(1); // Wait for client to receive data
+    client.stop(); // Disconnect client
+    Serial.println("Client disconnected");
+  }
+}
