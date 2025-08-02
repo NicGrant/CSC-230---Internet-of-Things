@@ -1,0 +1,79 @@
+/*
+  Nickolaus Grant
+  Assingmnet 12.1: ESP32 and a soft Access Point
+  Project 1 - The goal for this project is to have our M5core2 create a HTTP server, and have buttons in place to change the color of the device.
+*/
+// Libaraies needed to complete this Lab
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiAP.h>
+#include <M5Core2.h>
+
+// Custom SSID and password (left blanked to make things easier)
+const char* ssid = "M5ColorAP";
+const char* password = "";
+
+WiFiServer server(80);  // HTTP server on port 80
+
+void setup() {
+  M5.begin(); // Initialize M5Core2 hardware
+  M5.Lcd.setTextSize(2); // Set text size for display
+  M5.Lcd.setTextColor(WHITE); // Set text color
+  M5.Lcd.println("Starting Color AP");
+
+  Serial.begin(115200); // Start serial for debugging
+
+  // Start the Access Point
+  if (!WiFi.softAP(ssid, password)) {
+    Serial.println("Failed to start AP");
+    while (true); // Halt if failed
+  }
+
+  IPAddress ip = WiFi.softAPIP(); // Get IP address of AP
+  Serial.print("AP IP address: ");
+  Serial.println(ip);
+
+  server.begin(); // Start the web server
+  M5.Lcd.println("Visit 192.168.4.1");
+}
+
+void loop() {
+  WiFiClient client = server.available(); // Wait for web client to connect
+
+  if (client) {
+    String currentLine = "";
+
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read(); // Read byte from client
+        currentLine += c;
+
+        // Handle GET requests when newline is found
+        if (c == '\n') {
+          // Handle screen color change based on request
+          if (currentLine.indexOf("GET /red") >= 0) {
+            M5.Lcd.fillScreen(RED); // Change screen to red
+          } else if (currentLine.indexOf("GET /blue") >= 0) {
+            M5.Lcd.fillScreen(BLUE); // Change screen to blue
+          }
+
+          // Send HTTP response with buttons
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type:text/html");
+          client.println();
+          client.println("<!DOCTYPE html><html><body>");
+          client.println("<h2>Change Screen Color</h2>");
+          client.println("<form action=\"/red\" method=\"GET\"><button type=\"submit\">Red Screen</button></form>");
+          client.println("<form action=\"/blue\" method=\"GET\"><button type=\"submit\">Blue Screen</button></form>");
+          client.println("</body></html>");
+
+          break; // Stop processing this request
+        }
+      }
+    }
+
+    delay(1); // Give time to finish transmission
+    client.stop(); // Close connection
+    Serial.println("Client disconnected");
+  }
+}
