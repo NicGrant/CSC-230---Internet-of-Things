@@ -1,0 +1,132 @@
+/*
+  Nickolaus Grant
+  CSC:230 - Internet of Things
+  Assignment 13.1: Using MQTT
+
+  Project 2:
+  Connect M5Core2 to Wi-Fi, subscribe to an MQTT topic, and:
+    1. Print any messages received to the Serial Monitor
+    2. Display the messages on the LCD screen
+    3. Keep track of the number of messages received and display that count
+*/
+
+// Libaries need to complet this Project
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <M5Core2.h>
+
+// Wi-Fi credentials
+const char* ssid = "Ping Me Up";      
+const char* password = "Hub227!by";   
+
+// MQTT broker connection settings
+const char* mqtt_server = "test.mosquitto.org"; 
+const int mqtt_port = 1883;                     
+
+// MQTT topic to subscribe to
+const char* mqtt_topic = "m5core2/nicko/messages";
+
+// Create a Wi-Fi client for network communication
+WiFiClient espClient;
+
+// Create an MQTT client using the Wi-Fi client
+PubSubClient client(espClient);
+
+// Keep track of the total number of messages received
+int messageCount = 0;
+
+// timer 
+unsigned long lastPublishTime = 0;
+const unsigned long publishInterval = 15000;
+
+// Callback function - This function runs automatically when a new MQTT message is received, increase the count of messages received
+void callback(char* topic, byte* payload, unsigned int length) {
+  messageCount++;
+
+  // Print topic name to Serial Monitor
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+
+  // Convert payload bytes into a String
+  String message = "";
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];  
+  }
+  Serial.println(message);
+
+  //Display the message on the M5Core2 LCD
+  M5.Lcd.fillScreen(BLACK);                
+  M5.Lcd.setTextSize(2);                    
+  M5.Lcd.setTextColor(GREEN, BLACK);        
+  M5.Lcd.setCursor(10, 40);                 
+  M5.Lcd.printf("Message:\n%s", message.c_str());
+
+  // Display the message count at the bottom
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(YELLOW, BLACK);
+  M5.Lcd.setCursor(10, 200);
+  M5.Lcd.printf("Count: %d", messageCount);
+}
+
+// Connect to Wi-Fi
+void setup_wifi() {
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password); 
+
+  // Keep trying until connected
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);   
+    Serial.print(".");
+  }
+
+  // Once connected, print confirmation
+  Serial.println("\nWiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+// ===== Connect (or reconnect) to MQTT broker =====
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+
+    // Attempt to connect to broker with unique client ID
+    if (client.connect("M5ClientNickoP2")) {
+      Serial.println("connected");
+      client.subscribe(mqtt_topic);
+      client.publish(mqtt_topic, "M5Core2 is online for Project 2 and ready to receive messages");
+    } else {
+      Serial.print(" failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000); 
+    }
+  }
+}
+
+// setup Function
+void setup() {
+  M5.begin();                 
+  Serial.begin(115200);       
+  setup_wifi();               
+  client.setServer(mqtt_server, mqtt_port); 
+  client.setCallback(callback);             
+}
+
+// loop Function
+void loop() {
+  if (!client.connected()) {  
+    reconnect();
+  }
+  client.loop();               
+
+   // Publish every 15 seconds
+  unsigned long now = millis();
+  if (now - lastPublishTime >= publishInterval) {
+    lastPublishTime = now;
+    client.publish(mqtt_topic, "Hello from M5Core2 (auto msg)");
+    Serial.println("Sent: Hello from M5Core2 (auto msg)");
+  }
+}
