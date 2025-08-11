@@ -43,8 +43,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println(); 
 }
-
-
 void setup_wifi() {
   Serial.print("Connecting to "); 
   Serial.println(ssid);           
