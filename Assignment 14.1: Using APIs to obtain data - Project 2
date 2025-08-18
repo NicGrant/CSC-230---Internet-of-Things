@@ -1,0 +1,105 @@
+/*
+  Nickolaus S. Grant
+  Assignment 14.1: Using APIs to obtain data
+  Project 2 - Get the Temperature and Humidity for Tempe on Screen
+
+  The main goal for this assignment is to complete 3 projects that have been attached to this assignment.
+  This is the second project for this assignment. The goal of this project is dispaly the information we 
+  put in the serial monitor onto the M5Core2 screen. It needs to show the city, Humidity, and Temperature.
+  Not to much will change as I will just add M5.LCD to add the information on screen.
+*/
+
+// Preamble
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Arduino_JSON.h>
+#include <M5Core2.h>
+
+// My Network Credentials
+const char* ssid     = "Ping Me Up";
+const char* password = "Hub227!by";
+
+// OpenWeatherMap API key
+String apiKey = "2542c100f8eff80c67b2cabf85f5bda8";
+
+// City - Tempe
+String city = "Tempe";
+String countryCode = "US";
+
+// URL API call
+String serverName = "http://api.openweathermap.org/data/2.5/weather";
+
+// Setup Function
+void setup() {
+  
+  // Initialize the screen
+  M5.begin();                              
+  M5.Lcd.setTextSize(3);
+  
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+
+  Serial.println("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+}
+
+// Get the Weather data Function
+void getWeatherData() {
+  if (WiFi.status() == WL_CONNECTED) {
+      // Build the URl with city, country, and the API key
+    String requestURL = serverName + "?q=" + city + "," + countryCode + "&appid=" + apiKey + "&units=imperial";
+
+     // Used to get the GET Request
+    HTTPClient http;
+    http.begin(requestURL);
+    int httpResponseCode = http.GET();
+
+    // If Website URL is "OK" grab the data
+    if (httpResponseCode == 200) {
+      String payload = http.getString();
+
+      JSONVar data = JSON.parse(payload);
+      float temp     = (double) data["main"]["temp"];
+      float humidity = (double) data["main"]["humidity"];
+
+      // Serial Monitor Output
+      Serial.print("Temperature (F): ");
+      Serial.println(temp);
+      Serial.print("Humidity (%): ");
+      Serial.println(humidity);
+
+      // Screen Output 
+      M5.Lcd.fillScreen(BLACK); 
+      M5.Lcd.setCursor(10, 20);
+      M5.Lcd.printf("%s, %s", city.c_str(), countryCode.c_str());
+
+      M5.Lcd.setCursor(10, 60);
+      M5.Lcd.printf("Temp: %.2f F", temp);
+
+      M5.Lcd.setCursor(10, 100);
+      M5.Lcd.printf("Hum : %.2f %%", humidity);
+
+    } else {
+      Serial.print("Error on HTTP request: ");
+      Serial.println(httpResponseCode);
+    }
+
+    http.end();
+  } else {
+    Serial.println("WiFi not connected (inside function)");
+  }
+
+  // Adds a break line in the serial monitor so I can identify change easier
+  Serial.println("--------------------------");
+}
+
+// Loop Function
+void loop() {
+  getWeatherData();
+  delay(10000);
+}
