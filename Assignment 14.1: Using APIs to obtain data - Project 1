@@ -1,0 +1,96 @@
+/*
+  Nickolaus S. Grant
+  Assignment 14.1: Using APIs to obtain data
+  Project 1 - Get the Temperature and Humidity for Tempe
+
+  The main goal for this assignment is to complete 3 projects that have been attached to this assignment.
+  This is the first project, which set up the majority of the rest of the code for this assignment. We
+  are to use open weather map API to grab weather data and display that information on the serail monitor.
+ 
+  *Note - When copying the code from the instruction I ran into some trouble and added alot of Serial Prints
+  to help bug fix the issue so if you do run mind keep that in mind.*
+
+*/
+
+// Preamble
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Arduino_JSON.h>
+
+// My Network Credentials
+const char* ssid     = "Ping Me Up";
+const char* password = "Hub227!by";
+
+// OpenWeatherMap API key
+String apiKey = "2542c100f8eff80c67b2cabf85f5bda8";
+
+// City - Tempe
+String city = "Tempe";
+String countryCode = "US";
+
+// URL API call
+String serverName = "http://api.openweathermap.org/data/2.5/weather";
+
+// Setup Function
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+
+  Serial.println("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+}
+
+// Get the Weather data Function
+void getWeatherData() {
+  Serial.print("WiFi Status: ");
+  Serial.println(WiFi.status());
+  Serial.print("Local IP: ");
+  Serial.println(WiFi.localIP());
+
+  if (WiFi.status() == WL_CONNECTED) {
+    // Build the URl with city, country, and the API key
+    String requestURL = serverName + "?q=" + city + "," + countryCode + "&appid=" + apiKey + "&units=imperial";
+    Serial.print("Request URL: ");
+    Serial.println(requestURL);
+
+    // Used to get the GET Request
+    HTTPClient http;
+    http.begin(requestURL);
+    int httpResponseCode = http.GET();
+
+    Serial.print("HTTP Response Code: ");
+    Serial.println(httpResponseCode);
+
+    // If Website URL is "OK" grab the data
+    if (httpResponseCode == 200) {
+      String payload = http.getString();
+      Serial.println(payload);
+
+      JSONVar data = JSON.parse(payload);
+      float temp     = (double) data["main"]["temp"];
+      float humidity = (double) data["main"]["humidity"];
+
+      Serial.print("Temperature (F): ");
+      Serial.println(temp);
+      Serial.print("Humidity (%): ");
+      Serial.println(humidity);
+    }
+
+    http.end();
+  } else {
+    Serial.println("WiFi not connected (inside function)");
+  }
+  // Adds a break line in the serial monitor so I can identify change easier
+  Serial.println("--------------------------");
+}
+// Loop Function
+void loop() {
+  getWeatherData();      
+  // wait 10 seconds
+  delay(10000);            
+}
