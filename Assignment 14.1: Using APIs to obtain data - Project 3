@@ -1,0 +1,131 @@
+/*
+  Nickolaus S. Grant
+  Assignment 14.1: Using APIs to obtain data
+  Project 3 - Switching Ctites with Buttons
+  
+  The main goal for this assignment is to complete 3 projects that have been attached to this assignment.
+  This is the last project for this assignment. Now that we are able to see the data in serail monitor and
+  on the screen we should be able to use the button to switch between two cities. The aim for the 3rd project
+  is to use a button to swithc between Tempe and my hometown. I decided to create an array to hold the two cities
+  information and call it when the button is pressed.
+ 
+*/
+
+// Preamble
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Arduino_JSON.h>
+#include <M5Core2.h>
+
+//  My Network Credentials
+const char* ssid     = "Ping Me Up";
+const char* password = "Hub227!by";
+
+// OpenWeatherMap API key
+String apiKey = "2542c100f8eff80c67b2cabf85f5bda8";
+
+// Cities - Tempe or Celina
+String cities[2] = {"Tempe", "Celina"};
+String countryCode = "US";
+int currentCityIndex = 0;   // 0 = Tempe, 1 = Celina
+
+// URL API call
+String serverName = "http://api.openweathermap.org/data/2.5/weather";
+
+// Setup Function
+void setup() {
+  M5.begin();
+  M5.Lcd.setTextSize(3);
+
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+
+  Serial.println("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+}
+
+// Get the Weahter Data Function
+void getWeatherData() {
+  String city = cities[currentCityIndex];
+
+  // Build the URl with city, country, and the API key
+  if (WiFi.status() == WL_CONNECTED) {
+    String requestURL = serverName + "?q=" + city + "," + countryCode + "&appid=" + apiKey + "&units=imperial";
+
+    // Used to get the GET Request
+    HTTPClient http;
+    http.begin(requestURL);
+    int httpResponseCode = http.GET();
+
+    // If Website URL is "OK" grab the data
+    if (httpResponseCode == 200) {
+      String payload = http.getString();
+
+      JSONVar data = JSON.parse(payload);
+      float temp     = (double) data["main"]["temp"];
+      float humidity = (double) data["main"]["humidity"];
+
+      // Serial Monitor Output
+      Serial.print(city);
+      Serial.print(" Temp (F): ");
+      Serial.println(temp);
+      Serial.print(city);
+      Serial.print(" Humidity (%): ");
+      Serial.println(humidity);
+
+      // Screen Output 
+      M5.Lcd.fillScreen(BLACK);
+      M5.Lcd.setCursor(10, 20);
+      M5.Lcd.printf("%s, %s", city.c_str(), countryCode.c_str());
+
+      M5.Lcd.setCursor(10, 60);
+      M5.Lcd.printf("Temp: %.2f F", temp);
+
+      M5.Lcd.setCursor(10, 100);
+      M5.Lcd.printf("Hum : %.2f %%", humidity);
+
+    } else {
+      Serial.print("Error on HTTP request: ");
+      Serial.println(httpResponseCode);
+    }
+
+    http.end();
+  } else {
+    Serial.println("WiFi not connected (inside function)");
+  }
+
+  // Adds a break line in the serial monitor so I can identify change easier
+  Serial.println("--------------------------");
+}
+
+// Loop Function
+void loop() {
+  // update button states
+  M5.update();
+
+  // Check if Button A is pressed
+  if (M5.BtnA.wasPressed()) {
+    // toggle between 0 and 1 with the cities being Tempe = 0 and Celina = 1
+    currentCityIndex = (currentCityIndex + 1) % 2; 
+    // Print in Serial Monitor when Switching
+    Serial.print("Switching city to: ");
+    Serial.println(cities[currentCityIndex]);
+    // Immediately update display
+    getWeatherData(); 
+  }
+
+  // Automatically refresh every 10 seconds
+  static unsigned long lastUpdate = 0;
+  if (millis() - lastUpdate > 10000) {
+    lastUpdate = millis();
+    getWeatherData();
+  }
+
+  // Adds a small delay to debounce buttons
+  delay(100); 
+}
