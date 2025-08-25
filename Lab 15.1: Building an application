@@ -1,0 +1,149 @@
+/*
+  Nickolaus S. Grant
+  Final Project - Desk Monitor
+  Assignment: M5Core2 IoT Sensor Display
+
+  The main goal of this project is to develop a desk monitoring system using the M5Core2. 
+  This system reads temperature from a thermistor and light level from a photoresistor. 
+  LEDs indicate temperature thresholds and a buzzer alerts if the light level exceeds a set threshold.
+  The M5Core2 display shows a user interface with real-time temperature and light values, 
+  along with horizontal bar graphs to visualize sensor readings.
+*/
+
+// Preamble
+#include <M5Core2.h>
+#include <math.h>
+
+// Thermistor values
+#define THERMISTOR_PIN 36             
+#define REFERENCE_RESISTOR 26350.0    
+#define NOMINAL_RESISTANCE 7750.0     
+#define NOMINAL_TEMPERATURE 25.0      
+#define B_COEFFICIENT 3950.0          
+#define ADC_MAX 4095.0
+#define SUPPLY_VOLTAGE 3.3
+
+// LED Pins
+#define RED_LED_PIN 26
+#define WHITE_LED_PIN 25
+#define BLUE_LED_PIN 33
+
+// Temperature Threshold
+#define BLUE_THRESHOLD 70.0
+#define WHITE_THRESHOLD 80.0
+
+// Photoresistor Values
+#define LDR_PIN 35
+#define BUZZER_PIN 32
+#define LIGHT_THRESHOLD 2500         
+
+// UI Settings
+int barWidth = 150;                   
+int barHeight = 20;                   
+int barX = 145;                        
+
+// Setup LEDs based on temperature thresholds
+void updateLEDs(float tempF) {
+  digitalWrite(RED_LED_PIN, LOW);
+  digitalWrite(WHITE_LED_PIN, LOW);
+  digitalWrite(BLUE_LED_PIN, LOW);
+
+  if (tempF < BLUE_THRESHOLD) digitalWrite(BLUE_LED_PIN, HIGH);
+  else if (tempF < WHITE_THRESHOLD) digitalWrite(WHITE_LED_PIN, HIGH);
+  else digitalWrite(RED_LED_PIN, HIGH);
+}
+
+// Draw horizontal bar graph helper function
+void drawBarGraph(int x, int y, int w, int h, float percent, uint16_t color) {
+  M5.Lcd.drawRect(x, y, w, h, WHITE);          
+  int filledWidth = (int)(w * percent);        
+  if (filledWidth > 0)
+    M5.Lcd.fillRect(x + 1, y + 1, filledWidth - 2, h - 2, color);  
+}
+
+// Setup Function
+void setup() {
+  M5.begin();                   
+  analogReadResolution(12);     
+  Serial.begin(115200);         
+
+  // Initialize LEDs
+  pinMode(RED_LED_PIN, OUTPUT);
+  pinMode(WHITE_LED_PIN, OUTPUT);
+  pinMode(BLUE_LED_PIN, OUTPUT);
+
+  // Initialize buzzer
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  // Initialize screen
+  M5.Lcd.fillScreen(BLACK);
+  M5.Lcd.setTextSize(2);
+  M5.Lcd.setTextColor(WHITE, BLACK);
+}
+
+// Loop Function
+void loop() {
+  M5.update();                  
+
+  // Temperature Reading 
+  int adcTherm = analogRead(THERMISTOR_PIN);                         
+  float voltageTherm = adcTherm * SUPPLY_VOLTAGE / ADC_MAX;         
+  float thermistorResistance = REFERENCE_RESISTOR * ((SUPPLY_VOLTAGE / voltageTherm) - 1.0); 
+
+  // Calculate temperature using simplified Steinhart-Hart
+  float steinhart = thermistorResistance / NOMINAL_RESISTANCE;
+  steinhart = log(steinhart);
+  steinhart /= B_COEFFICIENT;
+  steinhart += 1.0 / (NOMINAL_TEMPERATURE + 273.15);
+  steinhart = 1.0 / steinhart;
+  steinhart -= 273.15;
+
+  float tempF = (steinhart * 9.0 / 5.0) + 32.0;   // Convert to Fahrenheit
+
+  // Update LEDs based on temperature thresholds
+  updateLEDs(tempF);
+
+  // Photoresisor Reading
+  int adcLDR = analogRead(LDR_PIN);                
+  if (adcLDR > LIGHT_THRESHOLD)                    
+    digitalWrite(BUZZER_PIN, HIGH);
+  else
+    digitalWrite(BUZZER_PIN, LOW);
+
+  // Serial Output for Debugging
+  Serial.print("Temp ADC: "); Serial.print(adcTherm);
+  Serial.print(" | R: "); Serial.print(thermistorResistance, 1); Serial.print(" Ohms");
+  Serial.print(" | Temp: "); Serial.print(tempF, 2); Serial.println(" F");
+  Serial.print("Light ADC: "); Serial.print(adcLDR);
+  Serial.println();
+
+  // UI Display
+  M5.Lcd.fillScreen(BLACK);
+
+  // Display title
+  M5.Lcd.setTextSize(3);
+  int16_t titleWidth = M5.Lcd.textWidth("Desk Monitor");
+  M5.Lcd.setCursor((240 - titleWidth)/2, 5);
+  M5.Lcd.print("Desk Monitor");
+
+  M5.Lcd.setTextSize(2);
+
+  // Display Temperature row
+  M5.Lcd.setCursor(10, 50);
+  M5.Lcd.printf("Temp: %.1fF", tempF);
+  uint16_t tempColor = GREEN;
+  if (tempF >= WHITE_THRESHOLD) tempColor = RED;
+  else if (tempF >= BLUE_THRESHOLD) tempColor = ORANGE;
+  float tempPercent = constrain((tempF - 32) / 100.0, 0.0, 1.0);  
+  drawBarGraph(barX, 50, barWidth, barHeight, tempPercent, tempColor);
+
+  // Display Light row
+  M5.Lcd.setCursor(10, 90);
+  M5.Lcd.printf("Light: %d", adcLDR);
+  uint16_t lightColor = (adcLDR > LIGHT_THRESHOLD) ? RED : GREEN;
+  float lightPercent = adcLDR / 4095.0;  
+  drawBarGraph(barX, 90, barWidth, barHeight, lightPercent, lightColor);
+
+  delay(500);   
+}
